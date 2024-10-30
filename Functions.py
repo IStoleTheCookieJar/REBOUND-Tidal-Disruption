@@ -22,62 +22,117 @@ N = 2 # Number of splits
 ###########################################
 
 def trial_function(x,k,a,mu):
+    """
+    A power law function that can be adjusted, takes the form of 
+    a*(x-mu)^(-k).
+    Input:
+     - x: np.array of x inputs to the function
+     - k: power of the function (i.e. k=2, function is proportional to 1/x^2)
+     - a: Amplitude of funcion
+     - mu: Offset from origin
+
+    Returns:
+    corresponding np.array of f(x)
+    """
     return a*(x-mu)**-k
 
 def uniform(x,a):
+    """
+    Uniform distribution
+    Input:
+     - x: np.array of x inputs
+     - a: amplitude of uniform distribution
+
+    Returns:
+    corresponding uniform array of len(x) with amplitude a
+    """
     return np.ones(len(x))*a
 
 def GenerateParameter(N,f,a_in,a_out,**kwargs):
-    f_max = -math.inf
-    f_min = math.inf
-    steps= np.linspace(a_in,a_out,10000)
-    sub_div = np.diff(steps)[0]
-    func_points = f(steps,**kwargs)
-    area = np.sum(func_points[:-1]+func_points[1:])/2*sub_div
+    """
+    Generates a randomized output of values between a_in and
+    a_out with f(x) as the probability density function.
+    Input:
+     - N: number of outputs
+     - f: equation function for PDF (i.e. x^2, or 1/x)
+     - a_in: minimum output value
+     - a_out: maximum output value
+     - **kwargs: any necessary input parameters to f(x) (i.e. amplitude, offset, power)
+    """
+    steps= np.linspace(a_in,a_out,10000) # range of inputs to find min and max
+    sub_div = np.diff(steps)[0] # dx
+    func_points = f(steps,**kwargs) # output of function to find min and max
+    area = np.sum(func_points[:-1]+func_points[1:])/2*sub_div # total area under curve
 
-    for i in steps:
-        if(f(i,**kwargs) > f_max):
-            f_max = f(i,**kwargs)
-        if(f(i,**kwargs) < f_min):
-            f_min = f(i,**kwargs)
+    f_max = np.max(func_points)
+    f_min = np.min(func_points)
 
     final = np.array([])
-    for i in range(N):
+    for i in range(N): # generating N number of outputs
         found = False
         while(found == False):
-            a = np.random.uniform()*(a_out-a_in)+a_in
-            y = (np.random.uniform()*f_max)/area
-            if(y <= f(a,**kwargs)/area):
-                final = np.append(final,a)
-                found = True
+            a = np.random.uniform()*(a_out-a_in)+a_in # generate an x between a_in and a_out
+            y = (np.random.uniform()*f_max)/area # generate a y below f_max
+            if(y <= f(a,**kwargs)/area): # if y is inside area under the curve
+                final = np.append(final,a) # accept it
+                found = True # stop while loop
 
     return final
 
 def GenerateDistribution(N,f,x_min=0,x_max=1, **kwargs):
-    edges = np.linspace(x_min,x_max,N+1)
+    """
+    Generate equally distributed x of function around center point of size N
+    i.e. if N = 2, f(x) = x^2, xmin=-1, xmax=1:
+        x = [-0.5,0.5]
+        y = [0.25,0.25]
+    if N = 4, f(x) = x^2, xmin = 0, xmax = 2:
+        x = [0.25,0.75,1.25,1.75]
+        y = [0.0625,0.5625,1.5625,3.0625]
+
+    Input:
+     - N: Number of data points
+     - f: y output function
+     - x_min: x minimum bound
+     - x_max: x maximum bound
+     - **kwargs, any necessary input to f(x)
+    """
+    edges = np.linspace(x_min,x_max,N+1) # find bounding box edges
     x = np.array([])
-    for i in range(N):
-        points = np.array([edges[i],edges[i+1]])
-        x = np.append(x,np.mean(points))
-    y = f(x, **kwargs)
-    return x,y
+    for i in range(N): # for N data points
+        points = np.array([edges[i],edges[i+1]]) # Select edges of 1 box
+        x = np.append(x,np.mean(points)) # find center of boudning box
+    y = f(x, **kwargs) # find f(x)
+    return x,y # return both x and y
 
 ##################################################
-# COLLISION FUNCTIONS
+# COLLISION FUNCTION
 ##################################################
 
 def vampire(sim_pointer, collided_particles_index):
-    global N
-    colors = [(1.,0.,0.),(0.,0.75,0.75),(0.75,0.,0.75),(0.75, 0.75, 0,),(0., 0., 0.),(0., 0., 1.),(0., 0.5, 0.)]
+    """
+    This is the collision module used by REBOUND to send information to hydrodynamical simulation
+    and recieve resulting output.
 
-    print('collision')
+    How to Use:
+    sim = rebound.Simulation()
+    sim.collision = 'line'
+    sim.collision_resolve = vampire
+
+    No further input or output knowledge should be necessary
+    """
+    global N # Be aware that wherever this function is defined, a global N variable that keeps track
+    # of the number of splits requested is within the same local file
+    # In this case, this global N is at the top of the .py and is modified by the Initialize() function
+    colors = [(1.,0.,0.),(0.,0.75,0.75),(0.75,0.,0.75),(0.75, 0.75, 0,),(0., 0., 0.),(0., 0., 1.),(0., 0.5, 0.)]
+    # a fixed color array with with these colors in order: [Red,Cyan,Magenta,Yellow,Black,Blue,Dark Green]
+
+    # print('collision') # Useful in .ipynbs to make sure simulation is having collisions
     sim = sim_pointer.contents # retreive the standard simulation object
     ps = sim.particles # easy access to list of particles
-    print(len(ps),N)
 
     if(ps[collided_particles_index.p1] == ps[0]):
         i = collided_particles_index.p1   # Note that p1 < p2 is not guaranteed.    
-        j = collided_particles_index.p2 
+        j = collided_particles_index.p2   # So we are gauranteeing that i will have the smaller value here
     else:
         j = collided_particles_index.p1   
         i = collided_particles_index.p2 
@@ -85,165 +140,176 @@ def vampire(sim_pointer, collided_particles_index):
     distance = np.sqrt((ps[i].x-ps[j].x)**2+(ps[i].y-ps[j].y)**2)
     # sim.N_active = len(ps)
 
-    # This part is exciting! We can execute additional code during collisions now!
-    op = rebound.OrbitPlot(sim, particles = [j], primary = 0, color=True)
-    op1 = rebound.OrbitPlot(sim, fig=op.fig, ax = op.ax)
-    op.ax.set_title("Particle {} and {} collision".format(j, i))
-    op.ax.text(ps[i].x, ps[i].y, "1") 
-    op.ax.text(ps[j].x, ps[j].y, "2");
-    plt.show()
-    op2 = rebound.OrbitPlot(sim, particles = [j], primary = 0, color=True)
-    op2.ax.set_xlim(-1.5*distance,1.5*distance)
-    op2.ax.set_ylim(-1.5*distance,1.5*distance)
-    op2.ax.set_title("Particle {} and {} collision zoomed".format(j,i))
-    op2.ax.text(ps[i].x, ps[i].y, "1") 
-    op2.ax.text(ps[j].x, ps[j].y, "2");
-    plt.show()
+    ################### Initial Plotting ###########################
+    # op = rebound.OrbitPlot(sim, particles = [j], primary = 0, color=True)
+    # op1 = rebound.OrbitPlot(sim, fig=op.fig, ax = op.ax)
+    # op.ax.set_title("Particle {} and {} collision".format(j, i))
+    # op.ax.text(ps[i].x, ps[i].y, "1") 
+    # op.ax.text(ps[j].x, ps[j].y, "2");
+    # plt.show()
+    # op2 = rebound.OrbitPlot(sim, particles = [j], primary = 0, color=True)
+    # op2.ax.set_xlim(-1.5*distance,1.5*distance)
+    # op2.ax.set_ylim(-1.5*distance,1.5*distance)
+    # op2.ax.set_title("Particle {} and {} collision zoomed".format(j,i))
+    # op2.ax.text(ps[i].x, ps[i].y, "1") 
+    # op2.ax.text(ps[j].x, ps[j].y, "2");
+    # plt.show()
     # So we plot the scenario exactly at the timestep that the collision function is triggered
     
-    ##################### Splitting ###########################
-    num_splits = N
+    ##################### Hydro Inputs ###########################
 
-    epsilon_range = np
+
+    ##################### Hydro Output ###########################
     
-    reduced_mass = ps[j].m/num_splits
-    x = ps[j].x
-    y = ps[j].y
-    z = ps[j].z
-    vx = ps[j].vx
-    vy = ps[j].vy
-    vz = ps[j].vz
-    v_vec = np.array([vx,vy,vz])
-    v_mag = np.sqrt(vx**2+vy**2+vz**2)
-    v_hat = v_vec/np.sqrt(vx**2+vy**2+vz**2)
+    if(i == 0):
+        return 2 # remove particle with index p2
+    elif(j == 0):
+        return 1 # remove particle with index p1
+    else:
+        return 0 # remove neither
+    ##################### Splitting (Defunct) #####################
+    # num_splits = N
 
-    # E_dist,trash = GenerateDistribution(num_splits,uniform,x_min=-delta_epsilon,x_max=delta_epsilon,a=1)
-    temp_delta_epsilon = (1/2)*(0.1*v_mag)**2*reduced_mass
-    E_dist,trash = GenerateDistribution(num_splits,uniform,x_min=-temp_delta_epsilon,
-                                        x_max=temp_delta_epsilon,a=1)
-
-    E_sign = E_dist/np.abs(E_dist)
-    E_dist = E_dist/E_sign
-    v_dist = np.sqrt(2*E_dist/reduced_mass)
-    v_dist = v_dist*E_sign
-    # print(v_vec)
-    # print(v_dist)
-    v_new = np.zeros((num_splits,3))
-    for k in range(num_splits):
-        v_new[k] = v_hat*v_dist[k]+v_vec
-    # print(v_new)
-    # a = ps[j].a
-    # e = ps[j].e
-    # inc = ps[j].inc
-    # omega = ps[j].omega
-    # Omega = ps[j].Omega
-    # M = ps[j].M
-
-    plot_list = []
-    for k in range(num_splits):
-        # sim.add(m=reduced_mass,\
-        #     a=(a*0.5*(i+1)),e=e,M=M,inc=inc,Omega=Omega,omega=omega,jacobi_masses=False)
-        sim.add(m=reduced_mass,x=x,y=y,z=z,vx=v_new[k,0],
-                vy=v_new[k,1],vz=v_new[k,2],jacobi_masses=False)
-        plot_list.append(-1*(k+1))
-
-    plot_list_array = np.array(plot_list)
-    plot_list_array = np.sort(plot_list_array)
+    # epsilon_range = np
     
-    orbits = sim.orbits()
-    print(len(orbits))
-    e = []
-    for k,orb in enumerate(orbits):
-        if((k == j) or (k >= len(ps)-len(plot_list))):
-            print(f"particle {k}, e = {orb.e}",f"e_x = {orb.evec.x}",f"e_y = {orb.evec.y}")
-        e.append(orb.e)
-    
-    e_sub = [e[x] for x in plot_list_array]
-    e_sub = np.array(e_sub)
-    unbound_mask = e_sub > 1
-    unbound = plot_list_array[unbound_mask]
-    bound = plot_list_array[~unbound_mask]
-    unbound = [x.item() for x in plot_list_array[unbound_mask]]
-    bound = [x.item() for x in plot_list_array[~unbound_mask]]
-    print(bound, unbound)
-    unbound_colors = []
-    bound_colors = []
-    for k in range(len(unbound)):
-        unbound_colors.append(colors[0])
-    for k in range(len(bound)):
-        bound_colors.append(colors[1])
+    # reduced_mass = ps[j].m/num_splits
+    # x = ps[j].x
+    # y = ps[j].y
+    # z = ps[j].z
+    # vx = ps[j].vx
+    # vy = ps[j].vy
+    # vz = ps[j].vz
+    # v_vec = np.array([vx,vy,vz])
+    # v_mag = np.sqrt(vx**2+vy**2+vz**2)
+    # v_hat = v_vec/np.sqrt(vx**2+vy**2+vz**2)
 
-    #################Plotting######################################
-    # op = rebound.OrbitPlot(sim, particles = [j], primary = 0, lw=2)
-    # op1 = rebound.OrbitPlot(sim, particles = plot_list, primary = 0,\
-    #                         color = True, fig=op.fig, ax = op.ax)
-    # op.ax.set_title("Particle {} split".format(j))
-    # op.ax.text(ps[j].x, ps[j].y, j) 
+    # # E_dist,trash = GenerateDistribution(num_splits,uniform,x_min=-delta_epsilon,x_max=delta_epsilon,a=1)
+    # temp_delta_epsilon = (1/2)*(0.1*v_mag)**2*reduced_mass
+    # E_dist,trash = GenerateDistribution(num_splits,uniform,x_min=-temp_delta_epsilon,
+    #                                     x_max=temp_delta_epsilon,a=1)
+
+    # E_sign = E_dist/np.abs(E_dist)
+    # E_dist = E_dist/E_sign
+    # v_dist = np.sqrt(2*E_dist/reduced_mass)
+    # v_dist = v_dist*E_sign
+    # # print(v_vec)
+    # # print(v_dist)
+    # v_new = np.zeros((num_splits,3))
+    # for k in range(num_splits):
+    #     v_new[k] = v_hat*v_dist[k]+v_vec
+    # # print(v_new)
+    # # a = ps[j].a
+    # # e = ps[j].e
+    # # inc = ps[j].inc
+    # # omega = ps[j].omega
+    # # Omega = ps[j].Omega
+    # # M = ps[j].M
+
+    # plot_list = []
+    # for k in range(num_splits):
+    #     # sim.add(m=reduced_mass,\
+    #     #     a=(a*0.5*(i+1)),e=e,M=M,inc=inc,Omega=Omega,omega=omega,jacobi_masses=False)
+    #     sim.add(m=reduced_mass,x=x,y=y,z=z,vx=v_new[k,0],
+    #             vy=v_new[k,1],vz=v_new[k,2],jacobi_masses=False)
+    #     plot_list.append(-1*(k+1))
+
+    # plot_list_array = np.array(plot_list)
+    # plot_list_array = np.sort(plot_list_array)
+    
+    # orbits = sim.orbits()
+    # print(len(orbits))
+    # e = []
+    # for k,orb in enumerate(orbits):
+    #     if((k == j) or (k >= len(ps)-len(plot_list))):
+    #         print(f"particle {k}, e = {orb.e}",f"e_x = {orb.evec.x}",f"e_y = {orb.evec.y}")
+    #     e.append(orb.e)
+    
+    # e_sub = [e[x] for x in plot_list_array]
+    # e_sub = np.array(e_sub)
+    # unbound_mask = e_sub > 1
+    # unbound = plot_list_array[unbound_mask]
+    # bound = plot_list_array[~unbound_mask]
+    # unbound = [x.item() for x in plot_list_array[unbound_mask]]
+    # bound = [x.item() for x in plot_list_array[~unbound_mask]]
+    # print(bound, unbound)
+    # unbound_colors = []
+    # bound_colors = []
+    # for k in range(len(unbound)):
+    #     unbound_colors.append(colors[0])
+    # for k in range(len(bound)):
+    #     bound_colors.append(colors[1])
+
+    # #################Plotting######################################
+    # # op = rebound.OrbitPlot(sim, particles = [j], primary = 0, lw=2)
+    # # op1 = rebound.OrbitPlot(sim, particles = plot_list, primary = 0,\
+    # #                         color = True, fig=op.fig, ax = op.ax)
+    # # op.ax.set_title("Particle {} split".format(j))
+    # # op.ax.text(ps[j].x, ps[j].y, j) 
+    # # plt.show()
+    
+    # op2 = rebound.OrbitPlot(sim, particles = unbound, primary = 0,\
+    #                         color = unbound_colors)
+    # op3 = rebound.OrbitPlot(sim, particles = bound, primary = 0,\
+    #                         color = bound_colors, fig = op2.fig, ax = op2.ax)
+    # op4 = rebound.OrbitPlot(sim, particles = [j], primary = 0, lw=2,\
+    #                         fig=op2.fig, ax = op2.ax)
+    # op2.ax.set_title("Particle {} split zoomed".format(j))
+    # op2.ax.set_xlim(-1.5*distance,1.5*distance)
+    # op2.ax.set_ylim(-1.5*distance,1.5*distance)
+    # op2.ax.scatter([],[],color=colors[0],label="Unbound",marker='_')
+    # op2.ax.scatter([],[],color=colors[1],label="Bound",marker='_')
+    # op2.ax.text(ps[j].x, ps[j].y, j)
+    # op2.ax.legend()
     # plt.show()
-    
-    op2 = rebound.OrbitPlot(sim, particles = unbound, primary = 0,\
-                            color = unbound_colors)
-    op3 = rebound.OrbitPlot(sim, particles = bound, primary = 0,\
-                            color = bound_colors, fig = op2.fig, ax = op2.ax)
-    op4 = rebound.OrbitPlot(sim, particles = [j], primary = 0, lw=2,\
-                            fig=op2.fig, ax = op2.ax)
-    op2.ax.set_title("Particle {} split zoomed".format(j))
-    op2.ax.set_xlim(-1.5*distance,1.5*distance)
-    op2.ax.set_ylim(-1.5*distance,1.5*distance)
-    op2.ax.scatter([],[],color=colors[0],label="Unbound",marker='_')
-    op2.ax.scatter([],[],color=colors[1],label="Bound",marker='_')
-    op2.ax.text(ps[j].x, ps[j].y, j)
-    op2.ax.legend()
-    plt.show()
 
-    op5 = rebound.OrbitPlot(sim, particles = bound, primary = 0,\
-                            color = bound_colors)
-    op6 = rebound.OrbitPlot(sim, particles = [j], primary = 0,\
-                            fig = op5.fig, ax = op5.ax)
-    op7 = rebound.OrbitPlot(sim, particles = unbound, primary = 0, lw=2,\
-                            color = unbound_colors, fig=op5.fig, ax = op5.ax)
-    op5.ax.set_title("Particle {} split outcome".format(j))
-    op5.ax.scatter([],[],color=colors[0],label="Unbound",marker='_')
-    op5.ax.scatter([],[],color=colors[1],label="Bound",marker='_')
-    op5.ax.text(ps[j].x, ps[j].y, j)
-    op5.ax.legend()
-    plt.show()
+    # op5 = rebound.OrbitPlot(sim, particles = bound, primary = 0,\
+    #                         color = bound_colors)
+    # op6 = rebound.OrbitPlot(sim, particles = [j], primary = 0,\
+    #                         fig = op5.fig, ax = op5.ax)
+    # op7 = rebound.OrbitPlot(sim, particles = unbound, primary = 0, lw=2,\
+    #                         color = unbound_colors, fig=op5.fig, ax = op5.ax)
+    # op5.ax.set_title("Particle {} split outcome".format(j))
+    # op5.ax.scatter([],[],color=colors[0],label="Unbound",marker='_')
+    # op5.ax.scatter([],[],color=colors[1],label="Bound",marker='_')
+    # op5.ax.text(ps[j].x, ps[j].y, j)
+    # op5.ax.legend()
+    # plt.show()
 
-    op8 = rebound.OrbitPlot(sim, particles = unbound, primary = 0,\
-                            color = unbound_colors,lw = 10)
-    op9 = rebound.OrbitPlot(sim, particles = bound, primary = 0,\
-                            color = bound_colors, lw = 10, fig = op8.fig, ax = op8.ax)
-    op10 = rebound.OrbitPlot(sim,primary = 0, fig = op8.fig, ax = op8.ax, alpha = 0.1)
+    # op8 = rebound.OrbitPlot(sim, particles = unbound, primary = 0,\
+    #                         color = unbound_colors,lw = 10)
+    # op9 = rebound.OrbitPlot(sim, particles = bound, primary = 0,\
+    #                         color = bound_colors, lw = 10, fig = op8.fig, ax = op8.ax)
+    # op10 = rebound.OrbitPlot(sim,primary = 0, fig = op8.fig, ax = op8.ax, alpha = 0.1)
 
-    op8.ax.set_title("Particle {} split Unbound".format(j))
-    op8.ax.scatter([],[],color=colors[0],label="Unbound",marker='_')
-    op8.ax.scatter([],[],color=colors[1],label="Bound",marker='_')
-    op8.ax.text(ps[j].x, ps[j].y, j)
-    op8.ax.legend()
-    plt.show()
+    # op8.ax.set_title("Particle {} split Unbound".format(j))
+    # op8.ax.scatter([],[],color=colors[0],label="Unbound",marker='_')
+    # op8.ax.scatter([],[],color=colors[1],label="Bound",marker='_')
+    # op8.ax.text(ps[j].x, ps[j].y, j)
+    # op8.ax.legend()
+    # plt.show()
 
-    op11 = rebound.OrbitPlot(sim, primary = 0,alpha = 0.1)
-    op12 = rebound.OrbitPlot(sim, particles = bound, primary = 0,\
-                            color = bound_colors, lw = 10, fig = op11.fig, ax = op11.ax)
-    op113 = rebound.OrbitPlot(sim,particles = unbound, primary = 0,\
-                              color = unbound_colors, lw = 10, fig = op11.fig, ax = op11.ax)
+    # op11 = rebound.OrbitPlot(sim, primary = 0,alpha = 0.1)
+    # op12 = rebound.OrbitPlot(sim, particles = bound, primary = 0,\
+    #                         color = bound_colors, lw = 10, fig = op11.fig, ax = op11.ax)
+    # op113 = rebound.OrbitPlot(sim,particles = unbound, primary = 0,\
+    #                           color = unbound_colors, lw = 10, fig = op11.fig, ax = op11.ax)
 
-    op11.ax.set_title("Particle {} split Totality".format(j))
-    op11.ax.scatter([],[],color=colors[0],label="Unbound",marker='_')
-    op11.ax.scatter([],[],color=colors[1],label="Bound",marker='_')
-    op11.ax.text(ps[j].x, ps[j].y, j)
-    op11.ax.legend()
-    plt.show()
+    # op11.ax.set_title("Particle {} split Totality".format(j))
+    # op11.ax.scatter([],[],color=colors[0],label="Unbound",marker='_')
+    # op11.ax.scatter([],[],color=colors[1],label="Bound",marker='_')
+    # op11.ax.text(ps[j].x, ps[j].y, j)
+    # op11.ax.legend()
+    # plt.show()
 
-
-    sys.exit()
-    # for i in range(num_splits):
-    #     ps = sim.particles
-    #     sim.remove(len(ps)-1)
-
-    # sim.remove(plot_list)
 
     # sys.exit()
+    # # for i in range(num_splits):
+    # #     ps = sim.particles
+    # #     sim.remove(len(ps)-1)
+
+    # # sim.remove(plot_list)
+
+    # # sys.exit()
     if(i == 0):
         print("Return",i,j)
         return 2 # remove particle with index j
@@ -416,6 +482,12 @@ def phys_shot(sim,filename):
     vx_data = []
     vy_data = []
     vz_data = []
+    a_data = []
+    e_data = []
+    inc_data = []
+    Omega_data = []
+    omega_data = []
+    M_data = [] # Mean anomaly
     for i in range(len(sim.particles)):
         m_data.append(sim.particles[i].m)
         x_data.append(sim.particles[i].x)
@@ -424,19 +496,25 @@ def phys_shot(sim,filename):
         vx_data.append(sim.particles[i].vx)
         vy_data.append(sim.particles[i].vy)
         vz_data.append(sim.particles[i].vz)
-    data = {'mass':m_data,'x':x_data,'y':y_data,'z':z_data,'vx':vx_data,'vy':vy_data,'vz':vz_data,'time':sim.t}
+        a_data.append(sim.particles[i].a)
+        e_data.append(sim.particles[i].e)
+        inc_data.append(sim.particles[i].inc)
+        Omega_data.append(sim.particles[i].Omega)
+        omega_data.append(sim.particles[i].omega)
+        M_data.append(sim.particles[i].M)
+    data = {'mass':m_data,'x':x_data,'y':y_data,'z':z_data,'vx':vx_data,'vy':vy_data,'vz':vz_data,\
+            'a':a_data,'e':e_data,'inc':inc_data,'Omega':Omega_data,'omega':omega_data,'M':M_data,'time':sim.t}
     df = pd.DataFrame(data)
     df.to_csv(filename)
     return sim
 
-# also unnecessary
 def unpack_phys_shot(sim,filename):
     df = pd.read_csv(filename)
     if(len(sim.particles) == 0):
         for i in range(df.shape[0]):
             sim.add(m=df['mass'][i],x=df['x'][i],y=df['y'][i],z=df['z'][i],vx=df['vx'][i],vy=df['vy'][i],vz=df['vz'][i])
         sim.t = df['time'][0]
-    elif(df.size == len(sim.particles)):
+    elif(len(df.index) == len(sim.particles)):
         for i in range(len(sim.particles)):
             sim.particles[i].m = df['mass'][i]
             sim.particles[i].x = df['x'][i]
